@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<!--
+  GOSSAMER TASTE ENGINE — swipe app (v2, hosted/shareable)
+  ========================================================
+  Deploy target: GitHub Pages (same-origin, no CORS issues).
+  Repo layout:
+    index.html         <- this file
+    manifest.json      <- array of ad records (contract below)
+    images/<file>      <- the scraped ad creatives
+
+  MANIFEST CONTRACT — each entry:
+    {
+      "id":        "Graza_ad_000",          // unique
+      "file":      "images/Graza_ad_000.jpg",// relative path, or omit for a concept card
+      "brand":     "Graza",
+      "source":    "reference",              // "reference" -> Inspiration mode | "gossamer" -> Approval mode
+      "ai": 1, "prod": 2, "comp": 3, "arr": 4, // HIDDEN axis scores (never shown to swiper)
+      "mechanism": "Disarming honesty"        // optional, internal
+    }
+  If manifest.json is missing, the app runs on a small built-in SAMPLE so the UX is visible.
+
+  TWO SURFACES, ONE DEPLOY:
+    default            -> Verena's clean swipe surface (axes invisible)
+    ?view=internal     -> Justin's taste readout (axis correlations + clustered whys)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gossamer Taste Engine</title>
+<style>
+  :root{
+    --green:#0A3422; --green-2:#0c3d29; --mint:#CBEDD0; --blush:#FAD9CE;
+    --peach:#F05D41; --golden:#F59B01; --paper:#FBFAF7;
+    --ink:#0A3422; --on-green:#EAF6EC; --muted:#8AA595; --line:rgba(203,237,208,.16);
+    --shadow:0 24px 60px -24px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--green);
+    color:var(--on-green);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+  .app{height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 16px 16px}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;padding:14px 2px 10px;flex:none}
+  .brand{font-weight:800;letter-spacing:-.02em;font-size:15px;color:var(--mint)}
+  .brand b{font-weight:800}
+  .mode{display:flex;gap:4px;background:rgba(0,0,0,.18);border-radius:999px;padding:3px}
+  .mode button{font:inherit;font-size:12px;font-weight:700;color:var(--muted);background:none;border:none;
+    padding:6px 12px;border-radius:999px;cursor:pointer;transition:.15s}
+  .mode button.on{background:var(--mint);color:var(--green)}
+  .count{flex:none;text-align:center;font-size:11.5px;color:var(--muted);letter-spacing:.04em;padding-bottom:8px}
+
+  /* card */
+  .stage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative}
+  .card{width:100%;max-height:100%;border-radius:20px;overflow:hidden;background:var(--green-2);
+    box-shadow:var(--shadow);display:flex;flex-direction:column;position:relative}
+  .card img{width:100%;height:100%;max-height:62dvh;object-fit:contain;background:#fff;display:block}
+  /* concept-card fallback (no image file) */
+  .concept{aspect-ratio:4/5;max-height:62dvh;display:flex;flex-direction:column;justify-content:flex-start;padding:30px 26px}
+  .concept .kick{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.7;margin-bottom:12px}
+  .concept .head{font-size:30px;line-height:1.05;font-weight:800;letter-spacing:-.02em}
+  .meta{position:absolute;left:12px;bottom:12px;font-size:11px;font-weight:600;color:rgba(255,255,255,.82);
+    background:rgba(0,0,0,.42);backdrop-filter:blur(6px);padding:5px 10px;border-radius:999px}
+
+  /* why — central, always visible */
+  .why{flex:none;margin:12px 2px 0}
+  .why input{width:100%;background:rgba(0,0,0,.16);border:1px solid var(--line);border-radius:13px;
+    color:var(--on-green);font:inherit;font-size:15px;padding:13px 15px}
+  .why input::placeholder{color:var(--muted)}
+  .why input:focus{outline:none;border-color:var(--mint)}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .tag{font:inherit;font-size:12px;font-weight:600;color:var(--muted);background:rgba(0,0,0,.16);
+    border:1px solid var(--line);border-radius:999px;padding:6px 11px;cursor:pointer;transition:.12s}
+  .tag.on{background:var(--blush);color:var(--green);border-color:var(--blush)}
+
+  /* verdict */
+  .verdict{flex:none;display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-top:12px}
+  .v{font:inherit;font-weight:800;font-size:16px;padding:17px 8px;border-radius:15px;border:none;cursor:pointer;
+    transition:transform .08s;color:var(--green)}
+  .v:active{transform:scale(.96)}
+  .v.no{background:var(--blush)} .v.no span{color:var(--peach)}
+  .v.maybe{background:#FCE9C7} .v.maybe span{color:#b06f00}
+  .v.yes{background:var(--mint)}
+  .v small{display:block;font-size:10.5px;font-weight:600;opacity:.6;margin-top:2px;letter-spacing:.03em}
+  .hint{flex:none;text-align:center;font-size:10.5px;color:var(--muted);padding:9px 0 2px;letter-spacing:.04em}
+
+  /* done / empty */
+  .pad{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;gap:14px}
+  .pad h2{font-size:22px;font-weight:800;color:var(--mint);letter-spacing:-.02em}
+  .pad p{font-size:14px;color:var(--muted);line-height:1.55;max-width:330px}
+  .big{font:inherit;font-weight:800;font-size:16px;color:var(--green);background:var(--mint);border:none;
+    border-radius:14px;padding:16px 26px;cursor:pointer}
+  .ghost{font:inherit;font-weight:600;font-size:13px;color:var(--muted);background:none;border:1px solid var(--line);
+    border-radius:12px;padding:11px 18px;cursor:pointer}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
+  /* internal readout */
+  .readout{height:100dvh;overflow-y:auto;max-width:620px;margin:0 auto;padding:24px 18px 60px}
+  .readout h1{font-size:20px;color:var(--mint);margin-bottom:4px}
+  .readout .sub{font-size:12.5px;color:var(--muted);margin-bottom:20px}
+  .panel{background:var(--green-2);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+  .panel h3{font-size:14px;color:var(--mint);margin-bottom:3px}
+  .panel .psub{font-size:12px;color:var(--muted);margin-bottom:14px}
+  .axis{margin-bottom:16px}
+  .axis .name{font-size:13px;font-weight:700;margin-bottom:8px}
+  .lvl{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:12px}
+  .lvl .k{width:74px;color:var(--muted);flex:none}
+  .lvl .bar{flex:1;height:8px;background:rgba(0,0,0,.25);border-radius:999px;overflow:hidden}
+  .lvl .bar i{display:block;height:100%;background:var(--mint)}
+  .lvl .n{width:54px;text-align:right;color:var(--muted);flex:none}
+  .whys{font-size:12.5px;color:var(--on-green);line-height:1.5}
+  .whys .g{margin-bottom:10px}
+  .whys b{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  .whys li{margin:4px 0;list-style:none;color:var(--muted)}
+  .whys li span{color:var(--on-green)}
+  .empty{color:var(--muted);font-size:13px;text-align:center;padding:30px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const PAL={blush:{bg:'#FAD9CE',fg:'#0A3422'},navy:{bg:'#01285B',fg:'#CBEDD0'},peach:{bg:'#F05D41',fg:'#fff7f2'},
+  golden:{bg:'#F59B01',fg:'#0A3422'},green:{bg:'#0A3422',fg:'#CBEDD0'},mint:{bg:'#CBEDD0',fg:'#0A3422'}};
+
+// sample deck (used only if manifest.json is absent) — concept cards, no image needed
+const SAMPLE=[
+ {id:'s1',brand:'Sample',source:'reference',ai:1,prod:4,comp:4,arr:3,mechanism:'Deadpan',pal:'mint',kick:'Sample',head:'Real ads load here once manifest.json is present.'},
+ {id:'s2',brand:'Sample',source:'reference',ai:2,prod:2,comp:2,arr:2,mechanism:'—',pal:'blush',kick:'Sample',head:'Swipe to feel the flow.'},
+ {id:'s3',brand:'Sample',source:'gossamer',ai:1,prod:3,comp:4,arr:3,mechanism:'—',pal:'peach',kick:'Approval',head:'Gossamer ads show up in Approval mode.'},
+];
+
+const TAGS={
+  reference:['Would make this','Not us','Love it','Off-brand but love it'],
+  gossamer:['Ship it','Off-brand','Performance worry','Wrong execution'],
+};
+const SCORE={yes:1,maybe:.5,no:0};
+const AXES=[['ai','AI-look (1 real → 5 AI)'],['prod','Production (1 cheap → 5 premium)'],['comp','Composition (1 busy → 5 focused)'],['arr','Arrest (1 forgettable → 5 stops me)']];
+
+let DECK=[], MODE='reference', swipes={}, why='', tag=null;
+const KEY='gte_v2_swipes';
+
+function load(){ try{swipes=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){swipes={}} }
+function save(){ try{localStorage.setItem(KEY,JSON.stringify(swipes))}catch(e){} }
+
+async function boot(){
+  load();
+  try{
+    const r=await fetch('manifest.json',{cache:'no-store'});
+    if(r.ok){ DECK=await r.json(); } else throw 0;
+  }catch(e){ DECK=SAMPLE; }
+  if(new URLSearchParams(location.search).get('view')==='internal') renderReadout();
+  else render();
+}
+
+const root=document.getElementById('root');
+const el=h=>{const d=document.createElement('div');d.innerHTML=h.trim();return d.firstElementChild;};
+function deckFor(mode){ return DECK.filter(a=>(a.source||'reference')===mode); }
+function nextIdx(mode){ const d=deckFor(mode); for(let i=0;i<d.length;i++) if(!swipes[d[i].id]) return i; return -1; }
+
+function render(){
+  root.innerHTML='';
+  const app=el(`<div class="app"></div>`);
+  // header
+  const total=deckFor(MODE).length, done=deckFor(MODE).filter(a=>swipes[a.id]).length;
+  const head=el(`<div class="top">
+    <div class="brand">Gossamer <b>Taste</b></div>
+    <div class="mode">
+      <button data-m="reference" class="${MODE==='reference'?'on':''}">Inspiration</button>
+      <button data-m="gossamer" class="${MODE==='gossamer'?'on':''}">Approval</button>
+    </div></div>`);
+  head.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{MODE=b.dataset.m;why='';tag=null;render();});
+  app.appendChild(head);
+  app.appendChild(el(`<div class="count">${done} of ${total} rated · ${MODE==='reference'?'would you want to make this?':'would you ship this?'}</div>`));
+
+  const i=nextIdx(MODE);
+  if(i<0){ app.appendChild(donePane()); root.appendChild(app); return; }
+  const ad=deckFor(MODE)[i];
+
+  // card
+  const stage=el(`<div class="stage"></div>`);
+  let card;
+  if(ad.file){
+    card=el(`<div class="card"><img src="${ad.file}" alt="" onerror="this.closest('.card').classList.add('broke')"><div class="meta">${ad.brand||''}</div></div>`);
+  }else{
+    const p=PAL[ad.pal]||PAL.mint;
+    card=el(`<div class="card"><div class="concept" style="background:${p.bg};color:${p.fg}">
+      <div class="kick">${ad.kick||ad.brand||''}</div><div class="head">${ad.head||''}</div></div>
+      <div class="meta">${ad.brand||''}</div></div>`);
+  }
+  stage.appendChild(card);
+  app.appendChild(stage);
+
+  // why (central)
+  const wrap=el(`<div class="why">
+    <input id="why" placeholder="Why? one word is plenty — “feels like us”, “too clinical”…" value="${why.replace(/"/g,'&quot;')}">
+    <div class="tags">${TAGS[MODE].map(t=>`<button class="tag ${tag===t?'on':''}" data-t="${t}">${t}</button>`).join('')}</div>
+  </div>`);
+  wrap.querySelector('#why').oninput=e=>why=e.target.value;
+  wrap.querySelectorAll('.tag').forEach(b=>b.onclick=()=>{tag=tag===b.dataset.t?null:b.dataset.t;
+    wrap.querySelectorAll('.tag').forEach(x=>x.classList.toggle('on',x.dataset.t===tag));});
+  app.appendChild(wrap);
+
+  // verdict
+  const v=el(`<div class="verdict">
+    <button class="v no" data-v="no"><span>No</span><small>not for us</small></button>
+    <button class="v maybe" data-v="maybe"><span>Maybe</span><small>on the fence</small></button>
+    <button class="v yes" data-v="yes">Yes<small>love it</small></button>
+  </div>`);
+  v.querySelectorAll('.v').forEach(b=>b.onclick=()=>commit(ad,b.dataset.v));
+  app.appendChild(v);
+  app.appendChild(el(`<div class="hint">← no  ·  ↓ maybe  ·  → yes</div>`));
+  root.appendChild(app);
+
+  const wi=document.getElementById('why');
+  document.onkeydown=e=>{
+    if(document.activeElement===wi) return;
+    if(e.key==='ArrowLeft')commit(ad,'no'); else if(e.key==='ArrowRight')commit(ad,'yes'); else if(e.key==='ArrowDown')commit(ad,'maybe');
+  };
+}
+
+function commit(ad,verdict){
+  swipes[ad.id]={verdict,why:why.trim(),tag,mode:MODE,ts:Date.now()};
+  save(); why=''; tag=null; render();
+}
+
+function donePane(){
+  const pane=el(`<div class="pad">
+    <h2>${MODE==='reference'?'That’s the inspiration set.':'That’s every Gossamer ad.'}</h2>
+    <p>Your picks are saved on this device. Send them to Justin so he can read what your eye is telling us — then you’re done.</p>
+    <button class="big" id="send">Send Justin my results</button>
+    <div class="row">
+      ${MODE==='reference'?`<button class="ghost" id="toapp">Do the Gossamer set →</button>`:`<button class="ghost" id="toins">Back to inspiration</button>`}
+      <button class="ghost" id="reset">Start over</button>
+    </div>
+  </div>`);
+  pane.querySelector('#send').onclick=sendResults;
+  const ta=pane.querySelector('#toapp'); if(ta) ta.onclick=()=>{MODE='gossamer';render();};
+  const ti=pane.querySelector('#toins'); if(ti) ti.onclick=()=>{MODE='reference';render();};
+  pane.querySelector('#reset').onclick=()=>{ if(confirm('Clear all your swipes on this device?')){swipes={};save();render();} };
+  return pane;
+}
+
+function sendResults(){
+  const data=JSON.stringify({when:new Date().toISOString(),swipes},null,2);
+  // download
+  const blob=new Blob([data],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='gossamer_taste_results.json';a.click();
+  // mailto fallback (short summary; full data is in the file)
+  const n=Object.keys(swipes).length;
+  const subj=encodeURIComponent('My Gossamer taste swipes ('+n+' ads)');
+  const body=encodeURIComponent('Hi Justin — attaching my swipe results (the file that just downloaded). Rated '+n+' ads.');
+  setTimeout(()=>{ location.href='mailto:?subject='+subj+'&body='+body; },400);
+}
+
+/* ---------- internal taste readout (Justin only, ?view=internal) ---------- */
+function renderReadout(){
+  document.body.style.overflow='auto';
+  const wrap=el(`<div class="readout"><h1>Taste readout</h1>
+    <div class="sub">What the swipes reveal, in terms of the hidden axes. Internal — never shown to the swiper.</div></div>`);
+  ['reference','gossamer'].forEach(mode=>{
+    const rated=DECK.filter(a=>swipes[a.id]&&(swipes[a.id].mode===mode||(a.source||'reference')===mode));
+    const panel=el(`<div class="panel"><h3>${mode==='reference'?'Inspiration (taste)':'Approval (brand fit)'}</h3>
+      <div class="psub">${rated.length} rated</div></div>`);
+    if(rated.length<3){ panel.appendChild(el(`<div class="empty">Need a few more swipes here.</div>`)); wrap.appendChild(panel); return; }
+    AXES.forEach(([k,label])=>{
+      const groups={};
+      rated.forEach(a=>{const s=a[k]; if(s==null)return; (groups[s]=groups[s]||[]).push(SCORE[swipes[a.id].verdict]);});
+      const ax=el(`<div class="axis"><div class="name">${label}</div></div>`);
+      [1,2,3,4,5].forEach(lv=>{
+        const arr=groups[lv]; if(!arr||!arr.length) return;
+        const yes=arr.reduce((x,y)=>x+y,0)/arr.length;
+        ax.appendChild(el(`<div class="lvl"><span class="k">level ${lv}</span>
+          <span class="bar"><i style="width:${Math.round(yes*100)}%"></i></span>
+          <span class="n">${Math.round(yes*100)}% · n${arr.length}</span></div>`));
+      });
+      panel.appendChild(ax);
+    });
+    // whys
+    const yY=rated.filter(a=>swipes[a.id].verdict==='yes'&&swipes[a.id].why);
+    const nY=rated.filter(a=>swipes[a.id].verdict==='no'&&swipes[a.id].why);
+    const whys=el(`<div class="whys">
+      ${yY.length?`<div class="g"><b style="color:var(--mint)">why yes</b><ul>${yY.map(a=>`<li>“<span>${swipes[a.id].why}</span>” — ${a.brand}</li>`).join('')}</ul></div>`:''}
+      ${nY.length?`<div class="g"><b style="color:var(--peach)">why no</b><ul>${nY.map(a=>`<li>“<span>${swipes[a.id].why}</span>” — ${a.brand}</li>`).join('')}</ul></div>`:''}
+    </div>`);
+    panel.appendChild(whys);
+    wrap.appendChild(panel);
+  });
+  // import others' results
+  const tools=el(`<div class="panel"><h3>Load a swiper’s results</h3>
+    <div class="psub">Drop in the JSON file Verena sent to merge her swipes into this readout.</div>
+    <input type="file" id="imp" accept="application/json" style="color:var(--muted);font-size:12px"></div>`);
+  tools.querySelector('#imp').onchange=e=>{
+    const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
+    rd.onload=()=>{ try{const d=JSON.parse(rd.result); Object.assign(swipes,d.swipes||d); save(); renderReadout();}catch(err){alert('Could not read that file.');} };
+    rd.readAsText(f);
+  };
+  wrap.appendChild(tools);
+  root.innerHTML=''; root.appendChild(wrap);
+}
+
+boot();
+</script>
+</body>
+</html>
